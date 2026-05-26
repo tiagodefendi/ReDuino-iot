@@ -1,3 +1,5 @@
+/* gateway */
+
 #include <SPI.h>
 #include "printf.h"
 #include "RF24.h"
@@ -10,13 +12,16 @@
 #define RTS  2
 #define CTS  3
 
-#define MAX_SIZE 32
-#define TIMEOUT  500
+#define MAX_SIZE     32
+#define TIMEOUT      500
+#define MAX_RETRIES  3
 
-uint64_t address[2]   = { 0x4040404040LL, 0x3030303030LL };
-uint64_t pipeAtuador  = 0x5050505050LL;
+uint64_t address[2]  = { 0x4040404040LL, 0x3030303030LL };
+uint64_t pipeAtuador = 0x5050505050LL;
 uint8_t  origem  = 30;
 uint8_t  sensor  = 47;
+uint8_t  atuador = 60;
+uint8_t  canalAtual = 76;
 
 RF24 radio(CE_PIN, CSN_PIN);
 uint8_t payload[MAX_SIZE];
@@ -70,11 +75,41 @@ int recebe(int type, int src) {
   return 1;
 }
 
+// MACA completo gateway → atuador: RTS→CTS→DATA→ACK
+void enviaAtuador(char* distStr) {
+  uint8_t msg[8];
+  uint8_t msgLen = strlen(distStr);
+  for (uint8_t i = 0; i < msgLen; i++) msg[i] = (uint8_t)distStr[i];
+
+  radio.openWritingPipe(pipeAtuador);
+
+  for (int t = 0; t < MAX_RETRIES; t++) {
+    // Etapa 1: RTS
+    envia(atuador, RTS, (uint8_t*)"", 4);
+
+    // Etapa 2: aguarda CTS
+    if (recebe(CTS, atuador) != 0) { delay(50*(t+1)); continue; }
+
+    // Etapa 3: DATA
+    envia(atuador, DATA, msg, msgLen + 4);
+
+    // Etapa 4: aguarda ACK
+    if (recebe(ACK, atuador) != 0) { delay(50*(t+1)); continue; }
+
+    break; // sucesso
+  }
+
+  radio.openWritingPipe(address[1]);
+}
+
 void escutar_ciclo() {
+  // Etapa 1: aguarda RTS do sensor
   if (recebe(RTS, sensor) != 0) return;
 
+  // Etapa 2: envia CTS
   envia(sensor, CTS, (uint8_t*)"", 4);
 
+  // Etapa 3: aguarda DATA
   if (recebe(DATA, sensor) != 0) return;
 
   // extrai distancia
@@ -86,18 +121,30 @@ void escutar_ciclo() {
     distStr[payloadLen] = '\0';
   }
 
-  // ACK ao sensor
+  // Etapa 4: envia ACK ao sensor
   envia(sensor, ACK, (uint8_t*)"", 4);
 
-  // envia ao Node.js — unico print permitido
+  // imprime pro Node.js
   Serial.print(sensor);
   Serial.print(F(": "));
   Serial.println(distStr);
 
-  // retransmite ao atuador
-  radio.openWritingPipe(pipeAtuador);
-  envia(60, DATA, (uint8_t*)distStr, strlen(distStr) + 4);
-  radio.openWritingPipe(address[1]);
+  // retransmite pro atuador com MACA completo
+  enviaAtuador(distStr);
+}
+
+// troca de canal via Serial: Node.js envia "CH:XX\n"
+void verificaComandoSerial() {
+  if (!Serial.available()) return;
+  String cmd = Serial.readStringUntil('\n');
+  cmd.trim();
+  if (cmd.startsWith("CH:")) {
+    uint8_t ch = cmd.substring(3).toInt();
+    if (ch <= 125) {
+      canalAtual = ch;
+      radio.setChannel(canalAtual);
+    }
+  }
 }
 
 void setup() {
@@ -105,9 +152,8 @@ void setup() {
   while (!Serial) {}
 
   if (!radio.begin()) { while (1) {} }
-
   radio.setPALevel(RF24_PA_LOW);
-  radio.setChannel(76);
+  radio.setChannel(canalAtual);
   radio.setDataRate(RF24_1MBPS);
   radio.setPayloadSize(MAX_SIZE);
   radio.setAutoAck(false);
@@ -117,6 +163,7 @@ void setup() {
 }
 
 void loop() {
+  verificaComandoSerial();
   escutar_ciclo();
   delay(10);
 }
