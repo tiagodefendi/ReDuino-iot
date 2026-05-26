@@ -1,101 +1,56 @@
 /**
  * ReDuino — Nó Sensor (Arduino Nano)
- * 
+ *
  * Hardware:
- *   - Arduino Nano
- *   - Módulo nRF24L01 (CE=7, CSN=8)
- *   - Sensor ultrassônico HC-SR04 (TRIG=3, ECHO=4)
- * 
- * Função:
- *   Mede a distância com o HC-SR04 e envia ao gateway via nRF24.
- *   Formato do payload: distância em cm como inteiro (2 bytes).
- * 
- * Protocolo (RTS → CTS → DATA → ACK):
- *   - Antes de enviar, faz RTS/CTS para checar o meio (CSMA-like).
- *   - Checksum de 1 byte no final de cada pacote.
- *   - Retransmite até MAX_RETRIES vezes em caso de falha.
+ * nRF24L01 : CE=7, CSN=8
+ * HC-SR04  : TRIG=2, ECHO=3
  */
 
 #include <SPI.h>
 #include "printf.h"
 #include "RF24.h"
 
-// -----------------------------------------------
-// Pinos
-// -----------------------------------------------
+// ── Pinos ────────────────────────────────────────────────────────────
 #define CE_PIN   7
 #define CSN_PIN  8
-#define TRIG_PIN 3
-#define ECHO_PIN 4
+#define TRIG_PIN 2
+#define ECHO_PIN 3
 
-// -----------------------------------------------
-// Protocolo
-// -----------------------------------------------
+// ── Protocolo ────────────────────────────────────────────────────────
 #define DATA 0
 #define ACK  1
 #define RTS  2
 #define CTS  3
 
-#define MAX_SIZE    32
-#define TIMEOUT     500   // ms para esperar ACK/CTS
-#define MAX_RETRIES 3     // tentativas de reenvio
-#define SEND_INTERVAL 200 // ms entre leituras
+#define MAX_SIZE      32
+#define TIMEOUT       500
+#define MAX_RETRIES   3
+#define SEND_INTERVAL 200
 
-// -----------------------------------------------
-// Endereços e identidades
-// -----------------------------------------------
+// ── Endereços ────────────────────────────────────────────────────────
 uint64_t address[2] = { 0x4040404040LL, 0x3030303030LL };
-uint8_t  origem  = 47;  // ID deste nó (sensor)
-uint8_t  destino = 30;  // ID do gateway
+uint8_t  origem  = 47;
+uint8_t  destino = 30;
 
 RF24 radio(CE_PIN, CSN_PIN);
-
 uint8_t payload[MAX_SIZE];
 uint8_t buffer[MAX_SIZE];
 
-// -----------------------------------------------
-// Funções utilitárias
-// -----------------------------------------------
+// ── Protocolo ─────────────────────────────────────────────────────────
 uint8_t checksum_f(uint8_t* msg, int size) {
   uint16_t sum = 0;
   for (int i = 0; i < size; i++) sum += msg[i];
   return (uint8_t)(sum & 0xFF);
 }
 
-/**
- * Mede distância com HC-SR04.
- * Retorna distância em cm, ou -1 em caso de timeout.
- */
-int medirDistancia() {
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-
-  long duracao = pulseIn(ECHO_PIN, HIGH, 23200); // timeout ~400cm
-  if (duracao == 0) return -1;
-
-  int distancia = (int)(duracao * 0.034 / 2);
-  return constrain(distancia, 0, 400);
-}
-
-// -----------------------------------------------
-// Protocolo de envio (igual ao código de referência)
-// -----------------------------------------------
 void envia(int dest, int tipo, uint8_t* mensagem, uint8_t size) {
   radio.flush_tx();
-
   payload[0] = origem;
   payload[1] = dest;
   payload[2] = tipo;
   payload[3] = size + 1;
-
-  for (int i = 0; i < size - 4; i++)
-    payload[i + 4] = mensagem[i];
-
-  uint8_t checksum = checksum_f(payload, size);
-  payload[size] = checksum;
+  for (int i = 0; i < size - 4; i++) payload[i + 4] = mensagem[i];
+  payload[size] = checksum_f(payload, size);
 
   unsigned long inicio = millis();
   while (millis() - inicio < TIMEOUT) {
@@ -103,12 +58,16 @@ void envia(int dest, int tipo, uint8_t* mensagem, uint8_t size) {
     delayMicroseconds(130);
     if (!radio.testCarrier()) {
       radio.stopListening();
-      radio.write(&payload[0], size + 1);
+      Serial.print(F("TX[")); Serial.print(size+1); Serial.print(F("]: "));
+      for (int i = 0; i < size + 1; i++) { Serial.print(payload[i]); Serial.print(' '); }
+      Serial.println();
+      radio.write(&payload[0], MAX_SIZE); // Mantém envio completo de 32 bytes
       return;
     }
+    radio.stopListening();
     delayMicroseconds(270);
   }
-  Serial.println(F("TimeOut! (canal ocupado)"));
+  Serial.println(F("CSMA timeout — canal sempre ocupado"));
 }
 
 int recebe(int type, int dest) {
@@ -116,116 +75,104 @@ int recebe(int type, int dest) {
   unsigned long inicio = millis();
   while (millis() - inicio < TIMEOUT) {
     if (radio.available()) {
-      delay(10);
+      // Removido delay(10)
       radio.read(buffer, MAX_SIZE);
       int tamanho = buffer[3];
-
-      if (buffer[0] != dest)    continue;
-      if (buffer[1] != origem)  continue;
-      if (buffer[2] != type)    continue;
-      if (tamanho > MAX_SIZE)   continue;
-
-      uint8_t cs = checksum_f(buffer, tamanho - 1);
-      if (buffer[tamanho - 1] != cs) continue;
-
+      if (buffer[0] != dest)   continue;
+      if (buffer[1] != origem) continue;
+      if (buffer[2] != type)   continue;
+      if (tamanho > MAX_SIZE)  continue;
+      if (buffer[tamanho-1] != checksum_f(buffer, tamanho-1)) continue;
       radio.flush_rx();
       return 0;
     }
   }
-  return 1; // timeout
+  return 1;
 }
 
-/**
- * Envia pacote de dados com protocolo RTS→CTS→DATA→ACK.
- * Retorna 0 em sucesso, >0 em erro.
- */
 int envia_pacote(int dest, uint8_t* mensagem, uint8_t size) {
   if (size + 5 > MAX_SIZE) return 1;
-
-  for (int tentativa = 0; tentativa < MAX_RETRIES; tentativa++) {
-    envia(dest, RTS, "", 4);
-
+  for (int t = 0; t < MAX_RETRIES; t++) {
+    envia(dest, RTS, (uint8_t*)"", 4);
     if (recebe(CTS, dest) != 0) {
-      Serial.println(F("CTS não recebido, retentando..."));
-      delay(50);
+      Serial.print(F("  sem CTS (tentativa ")); Serial.print(t + 1); Serial.println(F(")"));
+      delay(50 * (t + 1));
       continue;
     }
-
     envia(dest, DATA, mensagem, size + 4);
-
     if (recebe(ACK, dest) != 0) {
-      Serial.println(F("ACK não recebido, retentando..."));
-      delay(50);
+      Serial.print(F("  sem ACK (tentativa ")); Serial.print(t + 1); Serial.println(F(")"));
+      delay(50 * (t + 1));
       continue;
     }
-
-    return 0; // sucesso
+    return 0;
   }
-  return 2; // falha após retentativas
+  return 2;
 }
 
-// -----------------------------------------------
-// Setup
-// -----------------------------------------------
-void setup() {
-  Serial.begin(115200);
-  while (!Serial) {}
+// ── HC-SR04 ───────────────────────────────────────────────────────────
+int medirDistancia() {
+  digitalWrite(TRIG_PIN, LOW);  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH); delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+  long dur = pulseIn(ECHO_PIN, HIGH, 38000);
+  if (dur == 0) return -1;
+  return constrain((int)(dur * 0.034 / 2), 0, 400);
+}
 
-  pinMode(TRIG_PIN, OUTPUT);
+// ── Setup ─────────────────────────────────────────────────────────────
+void setup() {
+  Serial.begin(19200);
+
+  pinMode(TRIG_PIN, OUTPUT); digitalWrite(TRIG_PIN, LOW);
   pinMode(ECHO_PIN, INPUT);
 
   if (!radio.begin()) {
-    Serial.println(F("nRF24 não respondeu!"));
+    Serial.println(F("Radio nao respondeu!"));
     while (1) {}
   }
 
-  radio.setPALevel(RF24_PA_MAX);
-  radio.setChannel(121);
+  // ALTERAÇÕES CRÍTICAS DE HARDWARE AQUI:
+  radio.setPALevel(RF24_PA_LOW);   // Evita que o 3.3V do Nano desarme o módulo
+  radio.setChannel(76);            // Canal mais estável e longe do WiFi
+  radio.setDataRate(RF24_1MBPS);   // Compatível com todos os clones (250K falha muito)
+  
   radio.setPayloadSize(MAX_SIZE);
   radio.setAutoAck(false);
-  radio.setCRCLength(RF24_CRC_DISABLED);
-  radio.setDataRate(RF24_250KBPS);
-
+  radio.setCRCLength(RF24_CRC_16);
+  
   radio.openWritingPipe(address[0]);
   radio.openReadingPipe(1, address[1]);
 
-  printf_begin();
-  radio.printPrettyDetails();
-
-  Serial.println(F("=== ReDuino Sensor pronto ==="));
+  Serial.println(F("Sensor pronto."));
 }
 
-// -----------------------------------------------
-// Loop
-// -----------------------------------------------
+// ── Loop ──────────────────────────────────────────────────────────────
 void loop() {
-  int distancia = medirDistancia();
-
-  if (distancia < 0) {
-    Serial.println(F("⚠️  Sensor sem resposta"));
+  int dist = medirDistancia();
+  if (dist < 0) {
+    Serial.println(F("HC-SR04 sem leitura"));
     delay(SEND_INTERVAL);
     return;
   }
 
-  // Monta payload: distância como string (ex: "085")
-  // O gateway vai repassar como "47: 85" para o Node.js
+  Serial.print(F("Dist: "));
+  Serial.print(dist);
+  Serial.print(F("cm -> "));
+
   char msg[8];
-  snprintf(msg, sizeof(msg), "%d", distancia);
+  snprintf(msg, sizeof(msg), "%d", dist);
   uint8_t msgBytes[8];
   uint8_t msgLen = strlen(msg);
-  for (uint8_t i = 0; i < msgLen; i++) msgBytes[i] = msg[i];
+  for (uint8_t i = 0; i < msgLen; i++) msgBytes[i] = (uint8_t)msg[i];
 
-  Serial.print(F("Enviando distância: "));
-  Serial.print(distancia);
-  Serial.println(F(" cm"));
-
-  int resultado = envia_pacote(destino, msgBytes, msgLen);
-
-  if (resultado == 0) {
-    Serial.println(F("✓ Enviado com sucesso"));
+  int ret = envia_pacote(destino, msgBytes, msgLen);
+  if (ret == 0) {
+    Serial.println(F("OK"));
   } else {
-    Serial.print(F("✗ Falha no envio, código: "));
-    Serial.println(resultado);
+    Serial.print(F("FALHOU ("));
+    Serial.print(ret);
+    Serial.println(F(")"));
   }
 
   delay(SEND_INTERVAL);
