@@ -46,16 +46,16 @@ void atualizarFeedback(int dist) {
     return;
   }
   if (dist > 45) {
-    intervaloLED  = 1000; intervaloBuzz = 1000; freq = 350;
+    intervaloLED  = 1000; intervaloBuzz = 1000; freq = 3800;
   }
   if (dist > 30) {
-    intervaloLED  = 333;  intervaloBuzz = 333;  freq = 700;
+    intervaloLED  = 333;  intervaloBuzz = 333;  freq = 1400;
   }
   if (dist > 15) {
-    intervaloLED  = 150;  intervaloBuzz = 150;  freq = 1400;
+    intervaloLED  = 150;  intervaloBuzz = 150;  freq = 700;
   }
   else {
-    intervaloLED  = 100;  intervaloBuzz = 100;  freq = 3800;
+    intervaloLED  = 100;  intervaloBuzz = 100;  freq = 350;
   }
 
   if (agora - lastBlink >= intervaloLED) {
