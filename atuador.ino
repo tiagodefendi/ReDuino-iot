@@ -17,7 +17,7 @@
 #define MAX_SIZE 32
 #define TIMEOUT  500
 
-// ENDEREÇOS: 
+// ENDEREÇOS:
 uint64_t pipeAtuador       = 0x5050505050LL; // Onde o atuador escuta (Pipe 1)
 uint64_t addressGatewayRX  = 0x4040404040LL; // Onde o Gateway escuta (Para onde o atuador vai responder)
 
@@ -44,14 +44,18 @@ void atualizarFeedback(int dist) {
     digitalWrite(LED_PIN, LOW);
     noTone(BUZZER_PIN);
     return;
-  } else if (dist > 45) {
-    intervaloLED  = 1000; intervaloBuzz = 1000; freq = 700;
-  } else if (dist > 30) {
+  }
+  if (dist > 45) {
+    intervaloLED  = 1000; intervaloBuzz = 1000; freq = 350;
+  }
+  if (dist > 30) {
     intervaloLED  = 333;  intervaloBuzz = 333;  freq = 700;
-  } else if (dist > 15) {
-    intervaloLED  = 150;  intervaloBuzz = 150;  freq = 700;
-  } else {
-    intervaloLED  = 100;  intervaloBuzz = 100;  freq = 700;
+  }
+  if (dist > 15) {
+    intervaloLED  = 150;  intervaloBuzz = 150;  freq = 1400;
+  }
+  else {
+    intervaloLED  = 100;  intervaloBuzz = 100;  freq = 3800;
   }
 
   if (agora - lastBlink >= intervaloLED) {
@@ -174,7 +178,7 @@ void setup() {
   radio.setPayloadSize(MAX_SIZE);
   radio.setAutoAck(false);
   radio.setCRCLength(RF24_CRC_16);
-  
+
   // Configuração dos pipes bidirecionais
   radio.openReadingPipe(1, pipeAtuador);      // Escuta comandos direcionados a ele
   radio.openWritingPipe(addressGatewayRX);    // Escreve respostas voltadas ao Gateway
