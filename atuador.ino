@@ -46,14 +46,19 @@ void atualizarFeedback(int dist) {
     digitalWrite(LED_PIN, LOW);
     noTone(BUZZER_PIN);
     return;
-  } else if (dist > 45) {
-    intervaloLED  = 1000; intervaloBuzz = 1000; freq = 700;
+  }
+  if (dist <= 15) {
+    digitalWrite(LED_PIN, HIGH);
+    tone(BUZZER_PIN, 3800);
+    return;
+  }
+
+  if (dist > 45) {
+    intervaloLED  = 1000; intervaloBuzz = 1000; freq = 350;
   } else if (dist > 30) {
     intervaloLED  = 333;  intervaloBuzz = 333;  freq = 700;
-  } else if (dist > 15) {
-    intervaloLED  = 150;  intervaloBuzz = 150;  freq = 700;
   } else {
-    intervaloLED  = 100;  intervaloBuzz = 100;  freq = 700;
+    intervaloLED  = 150;  intervaloBuzz = 150;  freq = 1400;
   }
 
   if (agora - lastBlink >= intervaloLED) {
