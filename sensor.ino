@@ -1,4 +1,4 @@
-/* sensor*/ 
+/* sensor*/
 
 #include <SPI.h>
 #include "printf.h"
@@ -19,7 +19,9 @@
 #define MAX_RETRIES   3
 #define SEND_INTERVAL 700
 
-uint64_t address[2] = { 0x4040404040LL, 0x3030303030LL };
+#define NETWORK_ID 0x68
+
+uint64_t address[2] = { 0x3030303030LL, 0x3030303030LL };
 uint8_t  origem  = 47;
 uint8_t  destino = 30;
 
@@ -39,9 +41,10 @@ void envia(int dest, int tipo, uint8_t* mensagem, uint8_t size) {
   payload[0] = origem;
   payload[1] = dest;
   payload[2] = tipo;
-  payload[3] = size + 1;
-  for (int i = 0; i < size - 4; i++) payload[i + 4] = mensagem[i];
-  payload[size] = checksum_f(payload, size);
+  payload[3] = size + 2;
+  payload[4] = NETWORK_ID;
+  for (int i = 0; i < size - 4; i++) payload[i + 5] = mensagem[i];
+  payload[size+1] = checksum_f(payload, size+1);
 
   unsigned long inicio = millis();
   while (millis() - inicio < TIMEOUT) {
@@ -68,6 +71,7 @@ int recebe(int type, int dest) {
       if (buffer[0] != dest)   continue;
       if (buffer[1] != origem) continue;
       if (buffer[2] != type)   continue;
+      if (buffer[4] != NETWORK_ID)  continue;
       if (tamanho > MAX_SIZE)  continue;
       if (buffer[tamanho-1] != checksum_f(buffer, tamanho-1)) continue;
       radio.flush_rx();
@@ -124,7 +128,7 @@ void setup() {
   radio.setDataRate(RF24_1MBPS);
   radio.setPayloadSize(MAX_SIZE);
   radio.setAutoAck(false);
-  radio.setCRCLength(RF24_CRC_16);
+  radio.setCRCLength(RF24_CRC_DISABLED);
   radio.openWritingPipe(address[0]);
   radio.openReadingPipe(1, address[1]);
   Serial.println(F("Sensor pronto."));

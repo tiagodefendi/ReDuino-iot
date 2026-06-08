@@ -17,9 +17,11 @@
 #define MAX_SIZE 32
 #define TIMEOUT  500
 
-// ENDEREÇOS: 
-uint64_t pipeAtuador       = 0x5050505050LL; // Onde o atuador escuta (Pipe 1)
-uint64_t addressGatewayRX  = 0x4040404040LL; // Onde o Gateway escuta (Para onde o atuador vai responder)
+#define NETWORK_ID 0x68
+
+// ENDEREÇOS:
+uint64_t pipeAtuador       = 0x3030303030LL; // Onde o atuador escuta (Pipe 1)
+uint64_t addressGatewayRX  = 0x3030303030LL; // Onde o Gateway escuta (Para onde o atuador vai responder)
 
 uint8_t origem   = 60;
 uint8_t gateway  = 30;
@@ -78,9 +80,10 @@ void envia(int dest, int tipo, uint8_t* mensagem, uint8_t size) {
   payload[0] = origem;
   payload[1] = dest;
   payload[2] = tipo;
-  payload[3] = size + 1;
-  for (int i = 0; i < size - 4; i++) payload[i + 4] = mensagem[i];
-  payload[size] = checksum_f(payload, size);
+  payload[3] = size + 2;
+  payload[4] = NETWORK_ID;
+  for (int i = 0; i < size - 4; i++) payload[i + 5] = mensagem[i];
+  payload[size+1] = checksum_f(payload, size+1);
 
   unsigned long inicio = millis();
   while (millis() - inicio < TIMEOUT) {
@@ -106,6 +109,7 @@ int recebe(int type, int src) {
       if (buffer[0] != src)    continue;
       if (buffer[1] != origem) continue;
       if (buffer[2] != type)   continue;
+      if (buffer[4] != NETWORK_ID)    continue;
       if (tamanho > MAX_SIZE)  continue;
       if (buffer[tamanho-1] != checksum_f(buffer, tamanho-1)) continue;
       radio.flush_rx();
@@ -128,10 +132,10 @@ void escutar_ciclo_maca() {
 
   // Se chegou aqui, recebemos o dado com sucesso. Extrai a string:
   char distStr[8] = {0};
-  int payloadLen = buffer[3] - 5;
+  int payloadLen = buffer[3] - 6;
   if (payloadLen > 0 && payloadLen < 8) {
     for (int i = 0; i < payloadLen; i++)
-      distStr[i] = (char)buffer[i + 4];
+      distStr[i] = (char)buffer[i + 5];
     distStr[payloadLen] = '\0';
     lastDist = atoi(distStr);
   }
@@ -173,8 +177,8 @@ void setup() {
   radio.setDataRate(RF24_1MBPS);
   radio.setPayloadSize(MAX_SIZE);
   radio.setAutoAck(false);
-  radio.setCRCLength(RF24_CRC_16);
-  
+  radio.setCRCLength(RF24_CRC_DISABLED);
+
   // Configuração dos pipes bidirecionais
   radio.openReadingPipe(1, pipeAtuador);      // Escuta comandos direcionados a ele
   radio.openWritingPipe(addressGatewayRX);    // Escreve respostas voltadas ao Gateway

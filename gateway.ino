@@ -16,8 +16,10 @@
 #define TIMEOUT      500
 #define MAX_RETRIES  3
 
-uint64_t address[2]  = { 0x4040404040LL, 0x3030303030LL };
-uint64_t pipeAtuador = 0x5050505050LL;
+#define NETWORK_ID 0x68
+
+uint64_t address[2]  = { 0x3030303030LL, 0x3030303030LL };
+uint64_t pipeAtuador = 0x3030303030LL;
 uint8_t  origem  = 30;
 uint8_t  sensor  = 47;
 uint8_t  atuador = 60;
@@ -38,9 +40,10 @@ void envia(int dest, int tipo, uint8_t* mensagem, uint8_t size) {
   payload[0] = origem;
   payload[1] = dest;
   payload[2] = tipo;
-  payload[3] = size + 1;
-  for (int i = 0; i < size - 4; i++) payload[i + 4] = mensagem[i];
-  payload[size] = checksum_f(payload, size);
+  payload[3] = size + 2;
+  payload[4] = NETWORK_ID;
+  for (int i = 0; i < size - 4; i++) payload[i + 5] = mensagem[i];
+  payload[size+1] = checksum_f(payload, size+1);
 
   unsigned long inicio = millis();
   while (millis() - inicio < TIMEOUT) {
@@ -66,6 +69,7 @@ int recebe(int type, int src) {
       if (buffer[0] != src)    continue;
       if (buffer[1] != origem) continue;
       if (buffer[2] != type)   continue;
+      if (buffer[4] != NETWORK_ID)    continue;
       if (tamanho > MAX_SIZE)  continue;
       if (buffer[tamanho-1] != checksum_f(buffer, tamanho-1)) continue;
       radio.flush_rx();
@@ -114,10 +118,10 @@ void escutar_ciclo() {
 
   // extrai distancia
   char distStr[8] = {0};
-  int payloadLen = buffer[3] - 5;
+  int payloadLen = buffer[3] - 6;
   if (payloadLen > 0 && payloadLen < 8) {
     for (int i = 0; i < payloadLen; i++)
-      distStr[i] = (char)buffer[i + 4];
+      distStr[i] = (char)buffer[i + 5];
     distStr[payloadLen] = '\0';
   }
 
@@ -157,7 +161,7 @@ void setup() {
   radio.setDataRate(RF24_1MBPS);
   radio.setPayloadSize(MAX_SIZE);
   radio.setAutoAck(false);
-  radio.setCRCLength(RF24_CRC_16);
+  radio.setCRCLength(RF24_CRC_DISABLED);
   radio.openWritingPipe(address[1]);
   radio.openReadingPipe(1, address[0]);
 }
