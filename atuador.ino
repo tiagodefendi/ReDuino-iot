@@ -50,8 +50,8 @@ void atualizarFeedback(int dist) {
   unsigned long intervalo;
   int freq;
 
-  if      (dist > 45) { intervalo = 1000; freq = 350;  }
-  else if (dist > 20) { intervalo =  333; freq = 700;  }
+  if      (dist > 30) { intervalo = 1000; freq = 350;  }
+  else if (dist > 15) { intervalo =  333; freq = 700;  }
   else                { intervalo =  150; freq = 1400; }
 
   // Ao mudar de faixa, reseta os timers para resposta imediata
