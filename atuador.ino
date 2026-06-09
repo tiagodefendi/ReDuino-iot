@@ -3,24 +3,24 @@
 #include <SPI.h>
 #include "RF24.h"
 
-#define CE_PIN     7
-#define CSN_PIN    8
+#define CE_PIN 7
+#define CSN_PIN 8
 #define BUZZER_PIN A3
-#define LED_PIN    A1
+#define LED_PIN A1
 
 #define DATA 0
-#define ACK  1
-#define RTS  2
-#define CTS  3
+#define ACK 1
+#define RTS 2
+#define CTS 3
 
-#define MAX_SIZE   32
-#define TIMEOUT    100
+#define MAX_SIZE 32
+#define TIMEOUT 100
 #define NETWORK_ID 0x68
 
 const uint64_t PIPE_ADDR = 0x3030303030LL;
 
-uint8_t origem     = 60;
-uint8_t gateway    = 30;
+uint8_t origem = 60;
+uint8_t gateway = 30;
 uint8_t canalAtual = 12;
 
 RF24 radio(CE_PIN, CSN_PIN);
@@ -29,8 +29,8 @@ uint8_t buffer[MAX_SIZE];
 int lastDist = 201;
 
 void atualizarFeedback(int dist) {
-  static unsigned long lastBlink   = 0;
-  static unsigned long lastBeep    = 0;
+  static unsigned long lastBlink = 0;
+  static unsigned long lastBeep = 0;
   static unsigned long intervaloAtual = 0;
   static bool ledState = false;
   unsigned long agora = millis();
@@ -50,15 +50,20 @@ void atualizarFeedback(int dist) {
   unsigned long intervalo;
   int freq;
 
-  if      (dist > 30) { intervalo = 1000; freq = 350;  }
-  else if (dist > 15) { intervalo =  333; freq = 700;  }
-  else                { intervalo =  150; freq = 1400; }
+  if (dist > 30) {
+    intervalo = 1000; freq = 350;
+  }
+  else if (dist > 15) {
+    intervalo = 333; freq = 700;
+  }
+  else {
+    intervalo = 150; freq = 1400;
+  }
 
-  // Ao mudar de faixa, reseta os timers para resposta imediata
   if (intervalo != intervaloAtual) {
     intervaloAtual = intervalo;
     lastBlink = 0;
-    lastBeep  = 0;
+    lastBeep = 0;
     noTone(BUZZER_PIN);
   }
 
@@ -113,11 +118,11 @@ int recebe(int type, int src, unsigned int ms = TIMEOUT) {
     if (radio.available()) {
       radio.read(buffer, MAX_SIZE);
       int tamanho = buffer[3];
-      if (buffer[0] != src)                                    continue;
-      if (buffer[1] != origem)                                 continue;
-      if (buffer[2] != type)                                   continue;
-      if (buffer[4] != NETWORK_ID)                             continue;
-      if (tamanho > MAX_SIZE)                                  continue;
+      if (buffer[0] != src) continue;
+      if (buffer[1] != origem) continue;
+      if (buffer[2] != type) continue;
+      if (buffer[4] != NETWORK_ID) continue;
+      if (tamanho > MAX_SIZE) continue;
       if (buffer[tamanho-1] != checksum_f(buffer, tamanho-1)) continue;
       radio.flush_rx();
       return 0;
@@ -164,7 +169,7 @@ void setup() {
   Serial.begin(19200);
 
   pinMode(BUZZER_PIN, OUTPUT); digitalWrite(BUZZER_PIN, LOW);
-  pinMode(LED_PIN,    OUTPUT); digitalWrite(LED_PIN,    LOW);
+  pinMode(LED_PIN, OUTPUT); digitalWrite(LED_PIN, LOW);
 
   if (!radio.begin()) { while (1) {} }
   radio.setPALevel(RF24_PA_LOW);

@@ -3,24 +3,24 @@
 #include <SPI.h>
 #include "RF24.h"
 
-#define CE_PIN  7
+#define CE_PIN 7
 #define CSN_PIN 8
 
 #define DATA 0
-#define ACK  1
-#define RTS  2
-#define CTS  3
+#define ACK 1
+#define RTS 2
+#define CTS 3
 
-#define MAX_SIZE    32
-#define TIMEOUT     100
+#define MAX_SIZE 32
+#define TIMEOUT 100
 #define MAX_RETRIES 3
-#define NETWORK_ID  0x68
+#define NETWORK_ID 0x68
 
 const uint64_t PIPE_ADDR = 0x3030303030LL;
 
-uint8_t origem     = 30;
-uint8_t sensor     = 47;
-uint8_t atuador    = 60;
+uint8_t origem = 30;
+uint8_t sensor = 47;
+uint8_t atuador = 60;
 uint8_t canalAtual = 12;
 
 RF24 radio(CE_PIN, CSN_PIN);
@@ -65,11 +65,11 @@ int recebe(int type, int src, unsigned int ms = TIMEOUT) {
     if (radio.available()) {
       radio.read(buffer, MAX_SIZE);
       int tamanho = buffer[3];
-      if (buffer[0] != src)                                    continue;
-      if (buffer[1] != origem)                                 continue;
-      if (buffer[2] != type)                                   continue;
-      if (buffer[4] != NETWORK_ID)                             continue;
-      if (tamanho > MAX_SIZE)                                  continue;
+      if (buffer[0] != src) continue;
+      if (buffer[1] != origem) continue;
+      if (buffer[2] != type) continue;
+      if (buffer[4] != NETWORK_ID) continue;
+      if (tamanho > MAX_SIZE) continue;
       if (buffer[tamanho-1] != checksum_f(buffer, tamanho-1)) continue;
       radio.flush_rx();
       return 0;
