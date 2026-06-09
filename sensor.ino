@@ -14,9 +14,9 @@
 #define CTS  3
 
 #define MAX_SIZE      32
-#define TIMEOUT       150
+#define TIMEOUT       100
 #define MAX_RETRIES   3
-#define SEND_INTERVAL 700
+#define SEND_INTERVAL 350
 #define NETWORK_ID    0x68
 
 const uint64_t PIPE_ADDR = 0x3030303030LL;
@@ -85,9 +85,9 @@ int envia_pacote(int dest, uint8_t* mensagem, uint8_t dataLen) {
   if (dataLen + 6 > MAX_SIZE) return 1;
   for (int t = 0; t < MAX_RETRIES; t++) {
     envia(dest, RTS, nullptr, 0);
-    if (recebe(CTS, dest) != 0) { delay(50*(t+1)); continue; }
+    if (recebe(CTS, dest) != 0) { delay(15*(t+1)); continue; }
     envia(dest, DATA, mensagem, dataLen);
-    if (recebe(ACK, dest) != 0) { delay(50*(t+1)); continue; }
+    if (recebe(ACK, dest) != 0) { delay(15*(t+1)); continue; }
     return 0;
   }
   return 2;

@@ -12,7 +12,7 @@
 #define CTS  3
 
 #define MAX_SIZE    32
-#define TIMEOUT     150
+#define TIMEOUT     100
 #define MAX_RETRIES 3
 #define NETWORK_ID  0x68
 
@@ -58,10 +58,10 @@ void envia(int dest, int tipo, uint8_t* mensagem, uint8_t dataLen) {
   }
 }
 
-int recebe(int type, int src) {
+int recebe(int type, int src, unsigned int ms = TIMEOUT) {
   radio.startListening();
   unsigned long inicio = millis();
-  while (millis() - inicio < TIMEOUT) {
+  while (millis() - inicio < ms) {
     if (radio.available()) {
       radio.read(buffer, MAX_SIZE);
       int tamanho = buffer[3];
@@ -90,7 +90,7 @@ void enviaAtuador(char* distStr) {
 }
 
 void escutar_ciclo() {
-  if (recebe(RTS, sensor) != 0) return;
+  if (recebe(RTS, sensor, 25) != 0) return;
   envia(sensor, CTS, nullptr, 0);
   if (recebe(DATA, sensor) != 0) return;
 

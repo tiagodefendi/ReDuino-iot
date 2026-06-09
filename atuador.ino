@@ -14,7 +14,7 @@
 #define CTS  3
 
 #define MAX_SIZE   32
-#define TIMEOUT    150
+#define TIMEOUT    100
 #define NETWORK_ID 0x68
 
 const uint64_t PIPE_ADDR = 0x3030303030LL;
@@ -51,7 +51,7 @@ void atualizarFeedback(int dist) {
   int freq;
 
   if      (dist > 45) { intervalo = 1000; freq = 350;  }
-  else if (dist > 30) { intervalo =  333; freq = 700;  }
+  else if (dist > 20) { intervalo =  333; freq = 700;  }
   else                { intervalo =  150; freq = 1400; }
 
   // Ao mudar de faixa, reseta os timers para resposta imediata
@@ -106,10 +106,10 @@ void envia(int dest, int tipo, uint8_t* mensagem, uint8_t dataLen) {
   }
 }
 
-int recebe(int type, int src) {
+int recebe(int type, int src, unsigned int ms = TIMEOUT) {
   radio.startListening();
   unsigned long inicio = millis();
-  while (millis() - inicio < TIMEOUT) {
+  while (millis() - inicio < ms) {
     if (radio.available()) {
       radio.read(buffer, MAX_SIZE);
       int tamanho = buffer[3];
@@ -127,7 +127,7 @@ int recebe(int type, int src) {
 }
 
 void escutar_ciclo_maca() {
-  if (recebe(RTS, gateway) != 0) return;
+  if (recebe(RTS, gateway, 25) != 0) return;
   envia(gateway, CTS, nullptr, 0);
   if (recebe(DATA, gateway) != 0) return;
 
